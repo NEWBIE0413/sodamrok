@@ -3,6 +3,7 @@
 from datetime import timedelta
 from pathlib import Path
 
+import logging
 import environ
 
 SRC_DIR = Path(__file__).resolve().parents[2]
@@ -20,6 +21,8 @@ env = environ.Env(
     REDIS_URL=(str, "redis://127.0.0.1:6379/0"),
     CHANNEL_LAYER_BACKEND=(str, "channels.layers.InMemoryChannelLayer"),
     ADMIN_URL=(str, "admin/"),
+    SENTRY_DSN=(str, ""),
+    SENTRY_TRACES_SAMPLE_RATE=(float, 0.0),
 )
 
 ENV_FILE = BASE_DIR / ".env"
@@ -54,6 +57,7 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    "lifelog.core",
     "lifelog.users",
     "lifelog.places",
     "lifelog.posts",
@@ -185,6 +189,26 @@ CHANNEL_LAYERS = {
 }
 if channel_backend != "channels.layers.InMemoryChannelLayer":
     CHANNEL_LAYERS["default"]["CONFIG"] = {"hosts": [env("REDIS_URL")]}
+
+SENTRY_DSN = env("SENTRY_DSN")
+SENTRY_TRACES_SAMPLE_RATE = env("SENTRY_TRACES_SAMPLE_RATE")
+
+if SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            DjangoIntegration(),
+            CeleryIntegration(),
+            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+        ],
+        traces_sample_rate=SENTRY_TRACES_SAMPLE_RATE,
+        send_default_pii=False,
+    )
 
 LOGGING = {
     "version": 1,

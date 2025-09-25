@@ -35,3 +35,15 @@ class FeedbackCreateSerializer(serializers.ModelSerializer):
             "metadata",
         )
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        trip = attrs.get("trip")
+        if user and not getattr(user, "is_staff", False):
+            if trip and trip.owner_id != user.id:
+                raise serializers.ValidationError({"trip": "trip_mismatch"})
+        trip_node = attrs.get("trip_node")
+        if trip_node and trip_node.trip_id != trip.id:
+            raise serializers.ValidationError({"trip_node": "trip_node_mismatch"})
+        return attrs
+

@@ -90,3 +90,17 @@ class TripWriteSerializer(serializers.ModelSerializer):
                 eta=node_data.get("eta"),
             )
 
+
+
+class TripRecommendationRequestSerializer(serializers.Serializer):
+    time_budget_min = serializers.IntegerField(min_value=15, required=False)
+    budget_min = serializers.IntegerField(min_value=0, required=False)
+    budget_max = serializers.IntegerField(min_value=0, required=False)
+    mode = serializers.ChoiceField(choices=Trip.Mode.choices, required=False)
+    categories = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+    tags = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+    mood = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
+    district = serializers.CharField(required=False, allow_blank=True)
+    limit = serializers.IntegerField(min_value=1, max_value=10, required=False, default=3)
+    skip_place_ids = serializers.ListField(child=serializers.UUIDField(), required=False, allow_empty=True)
+
