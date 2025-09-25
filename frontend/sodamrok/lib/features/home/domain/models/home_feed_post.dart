@@ -7,6 +7,9 @@ class HomeFeedPost {
     required this.caption,
     required this.mediaLabel,
     this.tags = const [],
+    this.likeCount = 0,
+    this.commentCount = 0,
+    this.isLiked = false,
   });
 
   final String id;
@@ -16,4 +19,7 @@ class HomeFeedPost {
   final String caption;
   final String mediaLabel;
   final List<String> tags;
+  final int likeCount;
+  final int commentCount;
+  final bool isLiked;
 }

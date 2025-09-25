@@ -6,37 +6,69 @@ import '../../shared/utils/spacing.dart';
 class TopBar extends StatelessWidget implements PreferredSizeWidget {
   const TopBar({super.key, required this.child});
 
-  factory TopBar.home({required VoidCallback onSearchTap}) {
+  factory TopBar.home({
+    required VoidCallback onSearchTap,
+    VoidCallback? onNotificationsTap,
+  }) {
     return TopBar(
       child: Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.local_florist_rounded, color: AppColors.primary),
-          ),
-          Gaps.sm,
-          const Expanded(
-            child: Text(
-              '수원 팔달구',
+            alignment: Alignment.center,
+            child: const Text(
+              '소',
               style: TextStyle(
-                color: AppColors.textMain,
-                fontWeight: FontWeight.w600,
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
           ),
           Gaps.sm,
-          InkWell(
-            onTap: onSearchTap,
-            overlayColor: MaterialStatePropertyAll(AppColors.primaryOpacity10),
-            child: const Padding(
-              padding: EdgeInsets.all(Insets.sm),
-              child: Icon(Icons.search, color: AppColors.textSecondary),
+          Expanded(
+            child: InkWell(
+              onTap: onSearchTap,
+              borderRadius: BorderRadius.circular(24),
+              child: Container(
+                height: 40,
+                padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE0D8CF)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.search_rounded, color: AppColors.textSecondary),
+                    Gaps.sm,
+                    const Expanded(
+                      child: Text(
+                        '장소나 태그를 검색해 보세요.',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Gaps.sm,
+          IconButton(
+            onPressed: onNotificationsTap ?? () {},
+            icon: const Icon(Icons.notifications_none_rounded, color: AppColors.textSecondary),
+            style: IconButton.styleFrom(
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(40, 40),
+              padding: const EdgeInsets.all(4),
             ),
           ),
         ],

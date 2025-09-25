@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from rest_framework import status
@@ -11,12 +11,13 @@ class UserAuthTests(APITestCase):
         self.user_url = "/api/v1/users/"
         self.token_url = "/api/auth/token/"
         self.refresh_url = "/api/auth/token/refresh/"
+        self.reset_url = "/api/auth/reset-password/"
         self.me_url = "/api/v1/users/me/"
 
     def test_user_registration_creates_account(self):
         payload = {
             "email": "newuser@example.com",
-            "password": "securepass123",
+            "password": "StrongPass123!",
             "display_name": "New User",
             "time_budget_min": 120,
             "mobility_mode": "walk",
@@ -78,4 +79,31 @@ class UserAuthTests(APITestCase):
 
         user.refresh_from_db()
         self.assertEqual(user.display_name, "Updated")
+
+    def test_password_reset_validates_password_strength(self):
+        user_model = get_user_model()
+        user_model.objects.create_user(email="reset@example.com", password="InitialPass123!")
+
+        weak_response = self.client.post(
+            self.reset_url,
+            {"email": "reset@example.com", "new_password": "12345678"},
+            format="json",
+        )
+        self.assertEqual(weak_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        strong_password = "ResetPass123!"
+        success_response = self.client.post(
+            self.reset_url,
+            {"email": "reset@example.com", "new_password": strong_password},
+            format="json",
+        )
+        self.assertEqual(success_response.status_code, status.HTTP_204_NO_CONTENT)
+
+        login_response = self.client.post(
+            self.token_url,
+            {"email": "reset@example.com", "password": strong_password},
+            format="json",
+        )
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", login_response.data)
 

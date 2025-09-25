@@ -3,10 +3,34 @@
 from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework import status
+from rest_framework.views import APIView
+
 
 from .models import User
-from .serializers import UserCreateSerializer, UserSerializer
+from .serializers import (
+    UserCreateSerializer,
+    UserSerializer,
+    UserTokenObtainPairSerializer,
+    PasswordResetSerializer,
+)
 
+
+class UserTokenObtainPairView(TokenObtainPairView):
+    serializer_class = UserTokenObtainPairSerializer
+
+
+
+
+class PasswordResetView(APIView):
+    permission_classes = (permissions.AllowAny,)
+
+    def post(self, request):
+        serializer = PasswordResetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()

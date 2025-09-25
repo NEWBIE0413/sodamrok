@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>소담록 지도</title>
+    <script type="text/javascript" src="//dapi.kakao.com/v2/maps/sdk.js?appkey=YOUR_KAKAO_API_KEY&libraries=services,clusterer,drawing"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let currentLocationMarker;
+        let postMarkers = [];
+
+        // 지도 초기화 (수원 팔달구 중심)
+        function initMap() {
+            const container = document.getElementById('map');
+            const options = {
+                center: new kakao.maps.LatLng(37.2636, 127.0286), // 수원 팔달구
+                level: 4,
+                mapTypeId: kakao.maps.MapTypeId.ROADMAP
+            };
+
+            map = new kakao.maps.Map(container, options);
+
+            // 줌 컨트롤 추가
+            const zoomControl = new kakao.maps.ZoomControl();
+            map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+            // 지도 클릭 이벤트
+            kakao.maps.event.addListener(map, 'click', function(mouseEvent) {
+                const latlng = mouseEvent.latLng;
+                sendMessageToFlutter('mapClicked', {
+                    lat: latlng.getLat(),
+                    lng: latlng.getLng()
+                });
+            });
+
+            // Flutter에 지도 준비 완료 알림
+            sendMessageToFlutter('mapReady', null);
+        }
+
+        // 현재 위치 마커 설정
+        function setCurrentLocation(lat, lng) {
+            if (currentLocationMarker) {
+                currentLocationMarker.setMap(null);
+            }
+
+            const position = new kakao.maps.LatLng(lat, lng);
+
+            currentLocationMarker = new kakao.maps.Marker({
+                position: position,
+                image: new kakao.maps.MarkerImage(
+                    'data:image/svg+xml;base64,' + btoa(`
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="8" fill="#3A7D74" stroke="white" stroke-width="3"/>
+                        </svg>
+                    `),
+                    new kakao.maps.Size(24, 24),
+                    { offset: new kakao.maps.Point(12, 12) }
+                )
+            });
+
+            currentLocationMarker.setMap(map);
+            map.setCenter(position);
+        }
+
+        // 게시글 마커 추가
+        function addPostMarker(id, lat, lng, title) {
+            const position = new kakao.maps.LatLng(lat, lng);
+
+            const marker = new kakao.maps.Marker({
+                position: position,
+                title: title,
+                image: new kakao.maps.MarkerImage(
+                    'data:image/svg+xml;base64,' + btoa(`
+                        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="16" cy="16" r="12" fill="#FFAB5C" stroke="white" stroke-width="2"/>
+                            <circle cx="16" cy="16" r="6" fill="white"/>
+                        </svg>
+                    `),
+                    new kakao.maps.Size(32, 32),
+                    { offset: new kakao.maps.Point(16, 16) }
+                )
+            });
+
+            marker.setMap(map);
+
+            // 마커 클릭 이벤트
+            kakao.maps.event.addListener(marker, 'click', function() {
+                sendMessageToFlutter('postMarkerClicked', { id: id, title: title });
+            });
+
+            postMarkers.push({ id: id, marker: marker });
+        }
+
+        // 지도 중심 이동
+        function moveToLocation(lat, lng, level = null) {
+            const position = new kakao.maps.LatLng(lat, lng);
+            map.setCenter(position);
+            if (level) {
+                map.setLevel(level);
+            }
+        }
+
+        // Flutter로 메시지 전송
+        function sendMessageToFlutter(type, data) {
+            if (window.flutter_inappwebview) {
+                window.flutter_inappwebview.callHandler('mapMessage', {
+                    type: type,
+                    data: data
+                });
+            }
+        }
+
+        // Flutter에서 호출할 함수들
+        window.setCurrentLocation = setCurrentLocation;
+        window.addPostMarker = addPostMarker;
+        window.moveToLocation = moveToLocation;
+
+        // 페이지 로드 완료 후 지도 초기화
+        window.onload = function() {
+            if (typeof kakao !== 'undefined' && kakao.maps) {
+                initMap();
+            } else {
+                console.error('Kakao Maps API not loaded');
+            }
+        };
+    </script>
+</body>
+</html>

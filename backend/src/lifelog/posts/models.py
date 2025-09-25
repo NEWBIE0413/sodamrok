@@ -32,7 +32,11 @@ class Post(UUIDModel, TimeStampedModel):
     media_urls = models.JSONField(default=list, blank=True)
     tags = models.ManyToManyField("places.Tag", through="PostTag", related_name="posts")
     geofence = models.JSONField(default=dict, blank=True)
-    expires_at = models.DateTimeField(null=True, blank=True, help_text="낙서 24시간 만료용")
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="게시 후 24시간 뒤 자동 만료",
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -51,4 +55,28 @@ class PostTag(models.Model):
 
     class Meta:
         unique_together = ("post", "tag")
+
+
+class PostLike(TimeStampedModel):
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='likes')
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='post_likes')
+
+    class Meta:
+        unique_together = ("post", "user")
+        indexes = [models.Index(fields=("post", "user"))]
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user_id}-{self.post_id}"
+
+
+class PostComment(UUIDModel, TimeStampedModel):
+    post = models.ForeignKey('Post', on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='post_comments')
+    content = models.TextField()
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.content[:30]
 

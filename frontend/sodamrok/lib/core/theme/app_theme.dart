@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 class AppColors {
   AppColors._();
@@ -10,7 +10,7 @@ class AppColors {
   static const Color textSecondary = Color(0xFF5C6D68);
   static const Color surface = Colors.white;
 
-  static Color get primaryOpacity10 => primary.withOpacity(0.1);
+  static Color get primaryOpacity10 => primary.withValues(alpha: 0.1);
 }
 
 class AppTheme {
@@ -24,7 +24,6 @@ class AppTheme {
 
     final colorScheme = ColorScheme.fromSeed(
       seedColor: AppColors.primary,
-      background: AppColors.background,
       primary: AppColors.primary,
       secondary: AppColors.accent,
       surface: AppColors.surface,
@@ -49,11 +48,11 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: AppColors.primary.withOpacity(0.12),
+        indicatorColor: AppColors.primary.withValues(alpha: 0.12),
         elevation: 8,
-        labelTextStyle: MaterialStateProperty.resolveWith(
+        labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => TextStyle(
-            fontWeight: states.contains(MaterialState.selected)
+            fontWeight: states.contains(WidgetState.selected)
                 ? FontWeight.w600
                 : FontWeight.w500,
           ),
