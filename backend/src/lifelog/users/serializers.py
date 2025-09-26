@@ -4,10 +4,52 @@ from django.contrib.auth import password_validation
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import User
+from lifelog.places.serializers import TagSerializer
+from lifelog.places.models import Tag
+
+from .models import User, UserPreferredTag
+
+
+class UserPreferredTagSerializer(serializers.ModelSerializer):
+    tag = TagSerializer(read_only=True)
+    tag_id = serializers.UUIDField(write_only=True)
+
+    class Meta:
+        model = UserPreferredTag
+        fields = ("id", "tag", "tag_id", "priority", "notes", "created_at")
+        read_only_fields = ("id", "tag", "created_at")
+
+    def validate_tag_id(self, value):
+        if not Tag.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Tag does not exist.")
+        return value
+
+    def create(self, validated_data):
+        tag_id = validated_data.pop("tag_id")
+        tag = Tag.objects.get(id=tag_id)
+        user = validated_data.pop("user", None) or self.context["request"].user
+        defaults = {"priority": validated_data.get("priority", 1), "notes": validated_data.get("notes", "")}
+        preferred, _ = UserPreferredTag.objects.update_or_create(
+            user=user,
+            tag=tag,
+            defaults=defaults,
+        )
+        return preferred
+
+    def update(self, instance, validated_data):
+        if "tag_id" in validated_data:
+            raise serializers.ValidationError({"tag_id": "Cannot change tag."})
+        if "user" in validated_data:
+            raise serializers.ValidationError({"user": "Cannot reassign preference owner."})
+        instance.priority = validated_data.get("priority", instance.priority)
+        instance.notes = validated_data.get("notes", instance.notes)
+        instance.save(update_fields=["priority", "notes"])
+        return instance
 
 
 class UserSerializer(serializers.ModelSerializer):
+    preferred_tags = UserPreferredTagSerializer(many=True, read_only=True)
+
     class Meta:
         model = User
         fields = (
@@ -18,6 +60,7 @@ class UserSerializer(serializers.ModelSerializer):
             "bio",
             "avatar",
             "preferences",
+            "preferred_tags",
             "onboarded_at",
             "time_budget_min",
             "budget_band",

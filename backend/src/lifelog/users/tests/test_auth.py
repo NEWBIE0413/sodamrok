@@ -40,8 +40,11 @@ class UserAuthTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         access = response.data.get("access")
         refresh = response.data.get("refresh")
+        profile = response.data.get("user")
         self.assertTrue(access)
         self.assertTrue(refresh)
+        self.assertIsNotNone(profile)
+        self.assertEqual(profile["email"], "auth@example.com")
 
         refresh_response = self.client.post(
             self.refresh_url,

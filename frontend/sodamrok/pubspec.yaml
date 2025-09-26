@@ -1,4 +1,4 @@
-name: sodamrok
+﻿name: sodamrok
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -37,11 +37,17 @@ dependencies:
   dio: ^5.4.3
   shared_preferences: ^2.2.3
 
-  # Kakao Map & Location
-  webview_flutter: ^4.4.4
+  # Location services
   location: ^5.0.3
-  permission_handler: ^11.1.0
-  url_launcher: ^6.2.2
+  geocoding: ^3.0.0
+
+  # Kakao Map SDK
+  kakao_map_sdk:
+    git:
+      url: https://github.com/gunyu1019/flutter_kakao_maps.git
+
+  # HTTP client for Kakao REST API
+  http: ^1.2.1
 
 dev_dependencies:
   flutter_test:
@@ -67,7 +73,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - assets/kakao_map.html
+    - assets/images/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
@@ -94,3 +100,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+
+
+
+

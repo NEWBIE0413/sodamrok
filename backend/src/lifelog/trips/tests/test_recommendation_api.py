@@ -32,7 +32,7 @@ class TripRecommendationAPITests(APITestCase):
             "categories": ["cafe"],
             "mood": ["calm"],
             "limit": 2,
-            "time_budget_min": 90,
+            "time_budget_min": 150,
         }
         response = self.client.post("/api/v1/trips/recommendations/", payload, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -48,3 +48,4 @@ class TripRecommendationAPITests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data["error"], "no_places_available")
+

@@ -3,8 +3,8 @@
 from django.db.models import Q
 from rest_framework import permissions, viewsets
 
-from .models import Place, Tag
-from .serializers import PlaceSerializer, PlaceWriteSerializer, TagSerializer
+from .models import FavoritePlace, Place, Tag
+from .serializers import FavoritePlaceSerializer, PlaceSerializer, PlaceWriteSerializer, TagSerializer
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -51,3 +51,20 @@ class PlaceViewSet(viewsets.ModelViewSet):
             ).distinct()
         return qs
 
+
+
+class FavoritePlaceViewSet(viewsets.ModelViewSet):
+    queryset = FavoritePlace.objects.none()
+    serializer_class = FavoritePlaceSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_queryset(self):
+        return FavoritePlace.objects.filter(user=self.request.user).select_related("place").order_by("-created_at")
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        if instance.user != self.request.user and not self.request.user.is_staff:
+            raise permissions.PermissionDenied("Cannot remove another user's favorite.")
+        super().perform_destroy(instance)

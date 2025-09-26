@@ -13,20 +13,14 @@ class TopBar extends StatelessWidget implements PreferredSizeWidget {
     return TopBar(
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            alignment: Alignment.center,
-            child: const Text(
-              '소',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontWeight: FontWeight.w700,
-              ),
+          SizedBox(
+            width: 60,
+            height: 48,
+            child: Image.asset(
+              'assets/images/sodamrok_bugger.png',
+              width: 52,
+              height: 40,
+              fit: BoxFit.contain,
             ),
           ),
           Gaps.sm,

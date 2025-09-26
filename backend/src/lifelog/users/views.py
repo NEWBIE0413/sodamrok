@@ -8,9 +8,10 @@ from rest_framework import status
 from rest_framework.views import APIView
 
 
-from .models import User
+from .models import User, UserPreferredTag
 from .serializers import (
     UserCreateSerializer,
+    UserPreferredTagSerializer,
     UserSerializer,
     UserTokenObtainPairSerializer,
     PasswordResetSerializer,
@@ -31,6 +32,23 @@ class PasswordResetView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class UserPreferredTagViewSet(viewsets.ModelViewSet):
+    queryset = UserPreferredTag.objects.none()
+    serializer_class = UserPreferredTagSerializer
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get_queryset(self):
+        return UserPreferredTag.objects.filter(user=self.request.user).select_related("tag").order_by("-priority", "-created_at")
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.user != self.request.user and not self.request.user.is_staff:
+            raise permissions.PermissionDenied("Cannot remove another user's preference.")
+        instance.delete()
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()

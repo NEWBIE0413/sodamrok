@@ -102,4 +102,16 @@ class User(UUIDModel, TimeStampedModel, AbstractBaseUser, PermissionsMixin):
         self.onboarded_at = timezone.now()
         self.save(update_fields=["onboarded_at"])
 
+class UserPreferredTag(TimeStampedModel):
+    user = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="preferred_tags")
+    tag = models.ForeignKey("places.Tag", on_delete=models.CASCADE, related_name="preferred_by")
+    priority = models.PositiveSmallIntegerField(default=1)
+    notes = models.CharField(max_length=120, blank=True)
+
+    class Meta:
+        unique_together = ("user", "tag")
+        ordering = ("-priority", "-created_at")
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user_id}:{self.tag_id}"
 

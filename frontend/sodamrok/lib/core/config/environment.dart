@@ -1,4 +1,4 @@
-class Environment {
+﻿class Environment {
   Environment._();
 
   static const String apiBaseUrl = String.fromEnvironment(
@@ -13,7 +13,12 @@ class Environment {
 
   static const bool useMockFeed = bool.fromEnvironment(
     'USE_MOCK_FEED',
-    defaultValue: false,
+    defaultValue: true, // Enable mock feed by default
+  );
+
+  static const String kakaoNativeAppKey = String.fromEnvironment(
+    'KAKAO_NATIVE_APP_KEY',
+    defaultValue: '',
   );
 
   static Map<String, String> defaultHeaders() {
@@ -28,3 +33,4 @@ class Environment {
     return headers;
   }
 }
+

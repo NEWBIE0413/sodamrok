@@ -2,17 +2,19 @@ import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:location/location.dart' as loc;
 
 import '../../../core/dependencies/app_dependencies.dart';
+import '../../../core/services/kakao_rest_api_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/spacing.dart';
 import '../../auth/application/auth_controller.dart';
-import '../../auth/presentation/login_screen.dart';
+import '../../auth/presentation/modern_login_screen.dart';
 import '../data/services/post_interaction_service.dart';
 import '../domain/exceptions/home_feed_exception.dart';
 import '../domain/repositories/home_feed_repository.dart';
 import '../domain/models/home_feed_post.dart';
-import 'widgets/kakao_map_widget.dart';
+import 'widgets/hand_drawn_map_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,19 +26,33 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late Future<HomeFeedData> _feedFuture;
   List<HomeFeedPost> _posts = [];
+  String _currentAddress = '현재 위치';
+  final loc.Location _location = loc.Location();
 
   @override
   void initState() {
     super.initState();
+    _feedFuture = AppDependencies.homeFeedRepository.fetchFeed();
     _loadFeed();
+    _getCurrentLocation();
   }
 
   Future<void> _loadFeed() async {
-    _feedFuture = AppDependencies.homeFeedRepository.fetchFeed();
-    final feedData = await _feedFuture;
-    setState(() {
-      _posts = feedData.posts;
-    });
+    try {
+      final feedData = await _feedFuture;
+      if (mounted) {
+        setState(() {
+          _posts = feedData.posts;
+        });
+      }
+    } catch (e) {
+      debugPrint('피드 로드 실패: $e');
+      if (mounted) {
+        setState(() {
+          _posts = [];
+        });
+      }
+    }
   }
 
   void _handlePostMarkerTapped(String postId, String title) {
@@ -49,10 +65,63 @@ class _HomeScreenState extends State<HomeScreen> {
     debugPrint('지도 클릭: $lat, $lng');
   }
 
+  Future<void> _getCurrentLocation() async {
+    try {
+      // 위치 서비스 활성화 확인
+      bool serviceEnabled = await _location.serviceEnabled();
+      if (!serviceEnabled) {
+        serviceEnabled = await _location.requestService();
+        if (!serviceEnabled) {
+          debugPrint('위치 서비스가 비활성화되어 있습니다.');
+          return;
+        }
+      }
+
+      // 위치 권한 확인
+      loc.PermissionStatus permissionGranted = await _location.hasPermission();
+      if (permissionGranted == loc.PermissionStatus.denied) {
+        permissionGranted = await _location.requestPermission();
+        if (permissionGranted != loc.PermissionStatus.granted) {
+          debugPrint('위치 권한이 거부되었습니다.');
+          return;
+        }
+      }
+
+      // 현재 위치 가져오기
+      final loc.LocationData locationData = await _location.getLocation();
+      if (locationData.latitude != null && locationData.longitude != null) {
+        await _getAddressFromCoordinates(
+          locationData.latitude!,
+          locationData.longitude!,
+        );
+      }
+    } catch (e) {
+      debugPrint('현재 위치 가져오기 실패: $e');
+    }
+  }
+
+  Future<void> _getAddressFromCoordinates(double lat, double lng) async {
+    try {
+      final address = await KakaoRestApiService.getAddressFromCoordinates(lat, lng);
+      if (mounted) {
+        setState(() {
+          _currentAddress = address;
+        });
+        debugPrint('현재 주소: $address');
+      }
+    } catch (e) {
+      debugPrint('주소 변환 실패: $e');
+      if (mounted) {
+        setState(() {
+          _currentAddress = '위치 정보 없음';
+        });
+      }
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
-    const topBarHeight = 64.0;
-    const locationLabel = '수원 팔달구';
     final mediaQuery = MediaQuery.of(context);
     final badgeTop = mediaQuery.padding.top + 16;
 
@@ -67,15 +136,16 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
         children: [
-          KakaoMapWidget(
+          HandDrawnMapWidget(
             posts: _posts,
             onPostMarkerTapped: _handlePostMarkerTapped,
             onMapTapped: _handleMapTapped,
+            onMapReady: () => debugPrint('Hand-drawn Maps 준비 완료!'),
           ),
           Positioned(
             top: badgeTop,
             left: 16,
-            child: const _LocationBadge(label: locationLabel),
+            child: _LocationBadge(label: _currentAddress),
           ),
           Positioned.fill(child: _FeedSheet(feedFuture: _feedFuture)),
         ],
@@ -176,7 +246,7 @@ class _FeedSheetState extends State<_FeedSheet> {
     final messenger = ScaffoldMessenger.of(context);
 
     if (!_authController.isAuthenticated) {
-      final result = await showLoginModal(context, _authController);
+      final result = await showModernLoginModal(context, _authController);
       if (!context.mounted || result != true || !_authController.isAuthenticated) {
         return;
       }
@@ -341,6 +411,26 @@ class _FeedSheetState extends State<_FeedSheet> {
     }
   }
 
+  void _handleSharePost(BuildContext context, HomeFeedPost post) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${post.authorName}님의 게시글을 공유했어요'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  void _handleProfileTap(BuildContext context, String authorName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$authorName님의 프로필'),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
@@ -401,28 +491,24 @@ class _FeedSheetState extends State<_FeedSheet> {
 
                           return RefreshIndicator(
                             onRefresh: _reload,
-                            child: ListView.separated(
+                            child: ListView.builder(
                               controller: controller,
                               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                              padding: EdgeInsets.fromLTRB(
-                                Insets.md,
-                                Insets.sm,
-                                Insets.md,
-                                Insets.lg + bottomInset,
+                              padding: EdgeInsets.only(
+                                top: Insets.xs,
+                                bottom: Insets.xl + bottomInset,
                               ),
                               itemBuilder: (context, index) {
                                 final post = posts[index];
-                                return _FeedPostCard(
+                                return _ModernFeedPostCard(
                                   post: post,
                                   isBusy: _isPerformingAction,
                                   onLike: () => _handlePostAction(context, post, _PostAction.like),
                                   onComment: () => _handlePostAction(context, post, _PostAction.comment),
+                                  onShare: () => _handleSharePost(context, post),
+                                  onProfileTap: () => _handleProfileTap(context, post.authorName),
                                 );
                               },
-                              separatorBuilder: (_, __) => const Divider(
-                                height: Insets.lg * 2,
-                                color: Color(0xFFE0D8CF),
-                              ),
                               itemCount: posts.length,
                             ),
                           );
@@ -447,130 +533,311 @@ class _FeedSheetState extends State<_FeedSheet> {
   }
 }
 
-class _FeedPostCard extends StatelessWidget {
-  const _FeedPostCard({
+class _ModernFeedPostCard extends StatelessWidget {
+  const _ModernFeedPostCard({
     required this.post,
     required this.isBusy,
     required this.onLike,
     required this.onComment,
+    required this.onShare,
+    required this.onProfileTap,
   });
 
   final HomeFeedPost post;
   final bool isBusy;
   final VoidCallback onLike;
   final VoidCallback onComment;
+  final VoidCallback onShare;
+  final VoidCallback onProfileTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.primary.withValues(alpha: 0.15),
-              child: Text(
-                post.authorInitial,
-                style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600),
-              ),
-            ),
-            Gaps.sm,
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      margin: const EdgeInsets.only(bottom: Insets.xs),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFF0F0F0), width: 0.5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header (Profile + More button)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Insets.md, vertical: Insets.sm),
+            child: Row(
               children: [
-                Text(
-                  post.authorName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textMain,
+                GestureDetector(
+                  onTap: onProfileTap,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              AppColors.primary,
+                              AppColors.accent,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            post.authorInitial,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Gaps.sm,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            post.authorName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textMain,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (post.timeAgoLabel.isNotEmpty)
+                            Text(
+                              post.timeAgoLabel,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  post.timeAgoLabel,
-                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                const Spacer(),
+                IconButton(
+                  splashRadius: 18,
+                  icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary, size: 20),
+                  onPressed: () {},
                 ),
               ],
             ),
-            const Spacer(),
-            IconButton(
-              splashRadius: 20,
-              icon: const Icon(Icons.more_horiz, color: AppColors.textSecondary),
-              onPressed: () {},
+          ),
+
+          // Media/Content Section
+          Container(
+            width: double.infinity,
+            height: 280,
+            margin: const EdgeInsets.symmetric(horizontal: Insets.md),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8F6F2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE8E3DB)),
             ),
-          ],
-        ),
-        Gaps.sm,
-        Container(
-          height: 180,
-          decoration: BoxDecoration(
-            color: const Color(0xFFECE7DE),
-            border: Border.all(color: const Color(0xFFD6CDC2)),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Placeholder for image
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.image_outlined,
+                      size: 48,
+                      color: AppColors.textSecondary.withValues(alpha: 0.6),
+                    ),
+                    Gaps.sm,
+                    Text(
+                      post.mediaLabel,
+                      style: TextStyle(
+                        color: AppColors.textSecondary.withValues(alpha: 0.8),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+                // Location tag (if available)
+                if (post.tags.isNotEmpty)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.location_on, color: Colors.white, size: 12),
+                          const SizedBox(width: 2),
+                          Text(
+                            post.tags.first,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-          alignment: Alignment.center,
-          child: Text(
-            post.mediaLabel,
-            style: const TextStyle(color: AppColors.textSecondary),
-          ),
-        ),
-        Gaps.sm,
-        Text(
-          post.caption,
-          style: const TextStyle(color: AppColors.textMain),
-        ),
-        if (post.tags.isNotEmpty) ...[
-          Gaps.xs,
-          Wrap(
-            spacing: Insets.sm,
-            runSpacing: Insets.xs,
-            children: post.tags
-                .map((tag) => Text(
-                      '#$tag',
+
+          Gaps.sm,
+
+          // Action buttons row
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+            child: Row(
+              children: [
+                _ActionButton(
+                  icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: post.isLiked ? Colors.red : AppColors.textSecondary,
+                  onPressed: isBusy ? null : onLike,
+                ),
+                Gaps.sm,
+                _ActionButton(
+                  icon: Icons.mode_comment_outlined,
+                  color: AppColors.textSecondary,
+                  onPressed: isBusy ? null : onComment,
+                ),
+                Gaps.sm,
+                _ActionButton(
+                  icon: Icons.share_outlined,
+                  color: AppColors.textSecondary,
+                  onPressed: onShare,
+                ),
+                const Spacer(),
+                if (post.tags.length > 1)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '#${post.tags.skip(1).first}',
                       style: const TextStyle(
                         color: AppColors.primary,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
-                    ))
-                .toList(),
-          ),
-        ],
-        Gaps.sm,
-        Row(
-          children: [
-            IconButton(
-              icon: Icon(
-                post.isLiked ? Icons.favorite : Icons.favorite_border_outlined,
-                color: post.isLiked ? AppColors.primary : AppColors.textSecondary,
-              ),
-              tooltip: '좋아요 남기기',
-              onPressed: isBusy ? null : onLike,
+                    ),
+                  ),
+              ],
             ),
-            if (post.likeCount > 0) ...[
-              const SizedBox(width: 4),
-              Text(
-                '${post.likeCount}',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontWeight: FontWeight.w600,
+          ),
+
+          // Like count
+          if (post.likeCount > 0 || post.commentCount > 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Gaps.xs,
+                  Row(
+                    children: [
+                      if (post.likeCount > 0) ...[
+                        Text(
+                          '좋아요 ${post.likeCount}개',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMain,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (post.commentCount > 0) ...[
+                          const Text(' · ', style: TextStyle(color: AppColors.textSecondary)),
+                          Text(
+                            '댓글 ${post.commentCount}개',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ] else if (post.commentCount > 0)
+                        Text(
+                          '댓글 ${post.commentCount}개',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+          // Caption
+          if (post.caption.isNotEmpty) ...[
+            Gaps.xs,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+              child: RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    color: AppColors.textMain,
+                    fontSize: 14,
+                    height: 1.4,
+                  ),
+                  children: [
+                    TextSpan(
+                      text: '${post.authorName} ',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    TextSpan(text: post.caption),
+                  ],
                 ),
               ),
-            ],
-            Gaps.sm,
-            IconButton(
-              icon: const Icon(Icons.mode_comment_outlined, color: AppColors.textSecondary),
-              tooltip: '댓글 남기기',
-              onPressed: isBusy ? null : onComment,
             ),
-            if (post.commentCount > 0) ...[
-              const SizedBox(width: 4),
-              Text(
-                '${post.commentCount}',
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-            ],
           ],
+
+          Gaps.md,
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  const _ActionButton({
+    required this.icon,
+    required this.color,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final Color color;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        child: Icon(
+          icon,
+          color: color,
+          size: 24,
         ),
-      ],
+      ),
     );
   }
 }

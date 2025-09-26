@@ -23,6 +23,11 @@ env = environ.Env(
     ADMIN_URL=(str, "admin/"),
     SENTRY_DSN=(str, ""),
     SENTRY_TRACES_SAMPLE_RATE=(float, 0.0),
+    OPENROUTER_API_KEY=(str, ""),
+    OPENROUTER_BASE_URL=(str, "https://openrouter.ai/api/v1"),
+    OPENROUTER_MODEL=(str, "anthropic/claude-3.5-sonnet"),
+    OPENROUTER_APP_URL=(str, ""),
+    OPENROUTER_TIMEOUT=(int, 45),
 )
 
 ENV_FILE = BASE_DIR / ".env"
@@ -192,6 +197,14 @@ if channel_backend != "channels.layers.InMemoryChannelLayer":
 
 SENTRY_DSN = env("SENTRY_DSN")
 SENTRY_TRACES_SAMPLE_RATE = env("SENTRY_TRACES_SAMPLE_RATE")
+
+OPENROUTER = {
+    "api_key": env("OPENROUTER_API_KEY"),
+    "base_url": env("OPENROUTER_BASE_URL"),
+    "model": env("OPENROUTER_MODEL"),
+    "app_url": env("OPENROUTER_APP_URL"),
+    "timeout": env("OPENROUTER_TIMEOUT"),
+}
 
 if SENTRY_DSN:
     import sentry_sdk

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from django.db import models
+from django.conf import settings
 from django.utils.text import slugify
 
 from lifelog.core.models import SoftDeleteModel, TimeStampedModel, UUIDModel
@@ -68,4 +69,16 @@ class PlaceTag(models.Model):
 
     class Meta:
         unique_together = ("place", "tag")
+
+class FavoritePlace(TimeStampedModel):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="favorite_places")
+    place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name="favorited_by")
+    note = models.CharField(max_length=140, blank=True)
+
+    class Meta:
+        unique_together = ("user", "place")
+        ordering = ("-created_at",)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user_id}:{self.place_id}"
 

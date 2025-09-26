@@ -6,7 +6,7 @@ import '../core/theme/app_theme.dart';
 import '../shared/utils/spacing.dart';
 import 'package:sodamrok/app/widgets/top_bar.dart';
 import '../features/auth/application/auth_controller.dart';
-import '../features/auth/presentation/login_screen.dart';
+import '../features/auth/presentation/modern_login_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -27,20 +27,14 @@ class _AppShellState extends State<AppShell> {
     final authController = AppDependencies.authController;
     _pages = [
       const HomeScreen(),
-      const _PlaceholderPage(
-        title: '트립 준비 중',
-        description: '추천 플로우와 저장된 코스를 이곳에 구성합니다.',
-      ),
-      const _PlaceholderPage(
-        title: '검색 준비 중',
-        description: '장소·태그 탐색 UI가 여기에 배치됩니다.',
-      ),
+      const _TripScreen(),
+      const _SearchPlaceholderPage(),
       _ProfilePage(controller: authController),
     ];
 
     _topBars = [
       TopBar.home(
-        onSearchTap: _showSearchPlaceholder,
+        onSearchTap: _showSearchScreen,
         onNotificationsTap: _showNotificationsPlaceholder,
       ),
       TopBar.placeholder('트립'),
@@ -49,12 +43,21 @@ class _AppShellState extends State<AppShell> {
     ];
   }
 
-  void _showSearchPlaceholder() {
-    if (!mounted) {
-      return;
-    }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('검색 기능을 준비 중이에요.')),
+  void _showSearchScreen() {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => const _SearchScreen(),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOut;
+          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+      ),
     );
   }
 
@@ -101,42 +104,38 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-class _PlaceholderPage extends StatelessWidget {
-  const _PlaceholderPage({required this.title, required this.description});
-
-  final String title;
-  final String description;
-
-
+class _SearchPlaceholderPage extends StatelessWidget {
+  const _SearchPlaceholderPage();
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: Insets.lg),
       child: Center(
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            border: Border.all(color: const Color(0xFFE0D8CF)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall,
-                textAlign: TextAlign.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_rounded,
+              size: 64,
+              color: Colors.grey,
+            ),
+            Gaps.md,
+            Text(
+              '검색 준비 중',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMain,
               ),
-              Gaps.md,
-              Text(
-                description,
-                style: Theme.of(context).textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+            ),
+            Gaps.sm,
+            Text(
+              '장소·태그 탐색 UI가 여기에 배치됩니다.',
+              style: TextStyle(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
@@ -223,7 +222,7 @@ class _ProfilePage extends StatelessWidget {
   }
 
   Future<void> _openLogin(BuildContext context) async {
-    await showLoginModal(context, controller);
+    await showModernLoginModal(context, controller);
   }
 }
 
@@ -263,4 +262,288 @@ class _ProfileInfoRow extends StatelessWidget {
   }
 }
 
+// 새로운 검색 화면
+class _SearchScreen extends StatefulWidget {
+  const _SearchScreen();
 
+  @override
+  State<_SearchScreen> createState() => _SearchScreenState();
+}
+
+class _SearchScreenState extends State<_SearchScreen>
+    with TickerProviderStateMixin {
+  late final AnimationController _animationController;
+  late final Animation<double> _searchBarAnimation;
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _searchBarAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    ));
+
+    // 화면 진입시 애니메이션 시작
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _animationController.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textMain),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: AnimatedBuilder(
+          animation: _searchBarAnimation,
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _searchBarAnimation.value,
+              alignment: Alignment.centerLeft,
+              child: Container(
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: '장소나 태그를 검색해보세요',
+                    prefixIcon: Icon(Icons.search, color: Colors.grey),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      body: const Padding(
+        padding: EdgeInsets.symmetric(horizontal: Insets.lg),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.search_rounded,
+                size: 64,
+                color: Colors.grey,
+              ),
+              Gaps.md,
+              Text(
+                '검색 기능 준비 중',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textMain,
+                ),
+              ),
+              Gaps.sm,
+              Text(
+                '장소와 태그 탐색 기능이 곧 추가됩니다',
+                style: TextStyle(color: AppColors.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 새로운 트립 화면
+class _TripScreen extends StatelessWidget {
+  const _TripScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
+      child: CustomScrollView(
+        slivers: [
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+          // 추천 트립 코스 섹션
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE0D8CF)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        color: Color(0xFF3A7D74),
+                        size: 24,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        '추천 트립 코스',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '어디론가 떠나고 싶지 않으신가요?\n주변에서 핫한 스팟을 스마트하게 엮어 구성된 트립코스를 따라가보세요!',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('추천 코스 기능을 준비 중이에요'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3A7D74),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('코스 둘러보기'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+          // 나의 스팟 섹션
+          SliverToBoxAdapter(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE0D8CF)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(
+                        Icons.bookmark_rounded,
+                        color: Color(0xFF3A7D74),
+                        size: 24,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        '나의 스팟',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textMain,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '내가 찜한 스팟들을 모아보고, 원하는 곳들을 골라 나만의 트립코스를 만들어보세요',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('스팟 관리 기능을 준비 중이에요'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF3A7D74)),
+                            foregroundColor: const Color(0xFF3A7D74),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text('내 스팟 관리'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('AI 트립코스 제작 기능을 준비 중이에요'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3A7D74),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text('코스 제작'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 100)), // FAB 공간 확보
+        ],
+      ),
+    );
+  }
+}

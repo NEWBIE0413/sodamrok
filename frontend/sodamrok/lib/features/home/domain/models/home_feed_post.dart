@@ -10,6 +10,8 @@ class HomeFeedPost {
     this.likeCount = 0,
     this.commentCount = 0,
     this.isLiked = false,
+    this.latitude,
+    this.longitude,
   });
 
   final String id;
@@ -22,4 +24,6 @@ class HomeFeedPost {
   final int likeCount;
   final int commentCount;
   final bool isLiked;
+  final double? latitude;
+  final double? longitude;
 }
