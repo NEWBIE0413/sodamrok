@@ -1,4 +1,5 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:kakao_map_sdk/kakao_map_sdk.dart';
 
 import 'app/app_shell.dart';
@@ -9,8 +10,11 @@ import 'package:sodamrok/features/auth/application/auth_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // .env 파일 로드
+  await dotenv.load(fileName: ".env");
+
   // 카카오맵 SDK 초기화
-  await KakaoMapSdk.instance.initialize('1b81234a7250834aca9d925309fbd7a4');
+  await KakaoMapSdk.instance.initialize(dotenv.env['KAKAO_NATIVE_APP_KEY'] ?? '');
 
   await AppDependencies.configure();
   runApp(const SodamrokApp());

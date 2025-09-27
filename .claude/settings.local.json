@@ -4,7 +4,11 @@
       "WebSearch",
       "WebFetch(domain:pub.dev)",
       "WebFetch(domain:github.com)",
-      "WebFetch(domain:docs.stadiamaps.com)"
+      "WebFetch(domain:docs.stadiamaps.com)",
+      "Bash(flutter analyze:*)",
+      "Bash(flutter run:*)",
+      "Bash(flutter:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

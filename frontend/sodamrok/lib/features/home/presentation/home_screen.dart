@@ -17,7 +17,10 @@ import '../domain/models/home_feed_post.dart';
 import 'widgets/hand_drawn_map_widget.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.isFeedMode = true, required this.toggleButton});
+
+  final bool isFeedMode;
+  final Widget toggleButton;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -128,12 +131,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       extendBodyBehindAppBar: true,
       extendBody: true,
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
-        icon: const Icon(Icons.auto_awesome_rounded),
-        label: const Text('추천 받기'),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
         children: [
           HandDrawnMapWidget(
@@ -147,7 +144,37 @@ class _HomeScreenState extends State<HomeScreen> {
             left: 16,
             child: _LocationBadge(label: _currentAddress),
           ),
-          Positioned.fill(child: _FeedSheet(feedFuture: _feedFuture)),
+          // 토글 버튼을 피드/트립 시트보다 뒤에 배치
+          Positioned(
+            right: 16,
+            bottom: 156, // 닫힌 피드 기준 약간 위쪽
+            child: widget.toggleButton,
+          ),
+          Positioned.fill(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (Widget child, Animation<double> animation) {
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 1.0),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeInOut,
+                  )),
+                  child: child,
+                );
+              },
+              child: widget.isFeedMode
+                  ? _FeedSheet(
+                      key: const ValueKey('feed'),
+                      feedFuture: _feedFuture,
+                    )
+                  : const _TripSheet(
+                      key: ValueKey('trip'),
+                    ),
+            ),
+          ),
         ],
       ),
     );
@@ -193,7 +220,7 @@ class _LocationBadge extends StatelessWidget {
 }
 
 class _FeedSheet extends StatefulWidget {
-  const _FeedSheet({required this.feedFuture});
+  const _FeedSheet({super.key, required this.feedFuture});
 
   final Future<HomeFeedData> feedFuture;
   static const double _collapsedHeight = 136;
@@ -890,6 +917,230 @@ class _FeedEmpty extends StatelessWidget {
         style: TextStyle(color: AppColors.textSecondary),
         textAlign: TextAlign.center,
       ),
+    );
+  }
+}
+
+// 트립 시트 - 피드 시트와 동일한 구조
+class _TripSheet extends StatefulWidget {
+  const _TripSheet({super.key});
+
+  static const double _collapsedHeight = 136;
+
+  @override
+  State<_TripSheet> createState() => _TripSheetState();
+}
+
+class _TripSheetState extends State<_TripSheet> {
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset = mediaQuery.padding.bottom;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final effectiveHeight = math.max(constraints.maxHeight - bottomInset, 1.0);
+        final collapsedRatio = _TripSheet._collapsedHeight / effectiveHeight;
+        final minChildSize = collapsedRatio.clamp(0.14, 0.28).toDouble();
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: DraggableScrollableSheet(
+            initialChildSize: minChildSize,
+            minChildSize: minChildSize,
+            maxChildSize: 1.0,
+            snap: true,
+            snapSizes: <double>[minChildSize, 1.0],
+            builder: (context, controller) {
+              return Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Color(0xFFE0D8CF), width: 1),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: Insets.sm),
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        color: const Color(0xFFD8D2C8),
+                      ),
+                    ),
+                    Expanded(
+                      child: CustomScrollView(
+                        controller: controller,
+                        slivers: [
+                          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+                          // 추천 트립 코스 섹션
+                          SliverToBoxAdapter(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: Insets.lg),
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE0D8CF)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.auto_awesome_rounded,
+                                        color: Color(0xFF3A7D74),
+                                        size: 24,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        '추천 트립 코스',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textMain,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    '어디론가 떠나고 싶지 않으신가요?\n주변에서 핫한 스팟을 스마트하게 엮어 구성된 트립코스를 따라가보세요!',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('추천 코스 기능을 준비 중이에요'),
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF3A7D74),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child: const Text('코스 둘러보기'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SliverToBoxAdapter(child: SizedBox(height: 20)),
+
+                          // 나의 스팟 섹션
+                          SliverToBoxAdapter(
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: Insets.lg),
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFE0D8CF)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(
+                                        Icons.bookmark_rounded,
+                                        color: Color(0xFF3A7D74),
+                                        size: 24,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        '나의 스팟',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textMain,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    '내가 찜한 스팟들을 모아보고, 원하는 곳들을 골라 나만의 트립코스를 만들어보세요',
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: OutlinedButton(
+                                          onPressed: () {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('스팟 관리 기능을 준비 중이에요'),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          },
+                                          style: OutlinedButton.styleFrom(
+                                            side: const BorderSide(color: Color(0xFF3A7D74)),
+                                            foregroundColor: const Color(0xFF3A7D74),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text('내 스팟 관리'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                content: Text('AI 트립코스 제작 기능을 준비 중이에요'),
+                                                behavior: SnackBarBehavior.floating,
+                                              ),
+                                            );
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: const Color(0xFF3A7D74),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          child: const Text('코스 제작'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          const SliverToBoxAdapter(child: SizedBox(height: 100)), // FAB 공간 확보
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

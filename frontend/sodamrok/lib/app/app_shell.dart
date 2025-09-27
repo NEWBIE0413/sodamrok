@@ -1,12 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 
-import '../core/config/environment.dart';
-import '../core/dependencies/app_dependencies.dart';
 import '../core/theme/app_theme.dart';
 import '../shared/utils/spacing.dart';
 import 'package:sodamrok/app/widgets/top_bar.dart';
-import '../features/auth/application/auth_controller.dart';
-import '../features/auth/presentation/modern_login_screen.dart';
 import '../features/home/presentation/home_screen.dart';
 
 class AppShell extends StatefulWidget {
@@ -17,19 +13,29 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _index = 0;
+  int _currentIndex = 0;
+  final ScrollController _scrollController = ScrollController();
+  bool _showBottomBar = false;
+  bool _isFeedMode = true; // 피드/트립 토글 상태
+  final bool _showToggleFab = true; // 토글 FAB 표시 여부
   late final List<Widget> _pages;
   late final List<PreferredSizeWidget> _topBars;
 
   @override
   void initState() {
     super.initState();
-    final authController = AppDependencies.authController;
+    _scrollController.addListener(_onScroll);
     _pages = [
-      const HomeScreen(),
+      HomeScreen(
+        toggleButton: _showToggleFab
+            ? _CustomToggleButton(
+                isFeedMode: _isFeedMode,
+                onToggle: _toggleMode,
+              )
+            : const SizedBox.shrink(),
+      ), // 동적으로 전달할 예정
       const _TripScreen(),
       const _SearchPlaceholderPage(),
-      _ProfilePage(controller: authController),
     ];
 
     _topBars = [
@@ -39,8 +45,22 @@ class _AppShellState extends State<AppShell> {
       ),
       TopBar.placeholder('트립'),
       TopBar.placeholder('검색'),
-      TopBar.placeholder('프로필'),
     ];
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final shouldShowBottomBar = _currentIndex == 0 && _scrollController.offset <= 0;
+    if (shouldShowBottomBar != _showBottomBar) {
+      setState(() {
+        _showBottomBar = shouldShowBottomBar;
+      });
+    }
   }
 
   void _showSearchScreen() {
@@ -70,16 +90,40 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
+  void _toggleMode() {
+    setState(() {
+      _isFeedMode = !_isFeedMode;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       extendBody: true,
-      appBar: _topBars[_index],
-      body: IndexedStack(
-        index: _index,
-        children: _pages,
-      ),
-      bottomNavigationBar: Container(
+      appBar: _topBars[_currentIndex],
+      body: _currentIndex == 0
+          ? Stack(
+              children: [
+                CustomScrollView(
+                  controller: _scrollController,
+                  slivers: [
+                    SliverFillRemaining(
+                      child: HomeScreen(
+                        isFeedMode: _isFeedMode,
+                        toggleButton: _showToggleFab
+                            ? _CustomToggleButton(
+                                isFeedMode: _isFeedMode,
+                                onToggle: _toggleMode,
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : _pages[_currentIndex],
+      bottomNavigationBar: _showBottomBar ? Container(
         decoration: const BoxDecoration(
           color: AppColors.surface,
           border: Border(
@@ -87,17 +131,83 @@ class _AppShellState extends State<AppShell> {
           ),
         ),
         child: NavigationBar(
-          selectedIndex: _index,
+          selectedIndex: _currentIndex,
           height: 72,
           backgroundColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
-          onDestinationSelected: (value) => setState(() => _index = value),
+          onDestinationSelected: (index) {
+            setState(() {
+              _currentIndex = index;
+              _showBottomBar = false;
+            });
+          },
           destinations: const [
             NavigationDestination(icon: Icon(Icons.map_rounded), label: '탐색'),
             NavigationDestination(icon: Icon(Icons.auto_awesome_rounded), label: '트립'),
             NavigationDestination(icon: Icon(Icons.search_rounded), label: '검색'),
-            NavigationDestination(icon: Icon(Icons.person_rounded), label: '프로필'),
           ],
+        ),
+      ) : null,
+      floatingActionButton: null, // Scaffold의 기본 FAB 사용하지 않음
+    );
+  }
+}
+
+// 커스텀 토글 버튼
+class _CustomToggleButton extends StatelessWidget {
+  const _CustomToggleButton({
+    required this.isFeedMode,
+    required this.onToggle,
+  });
+
+  final bool isFeedMode;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onToggle,
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isFeedMode ? Colors.white : null,
+          gradient: isFeedMode
+              ? null
+              : const LinearGradient(
+                  colors: [Color(0xFF9C27B0), Color(0xFFE91E63)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Container(
+            key: ValueKey(isFeedMode),
+            decoration: isFeedMode
+                ? const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF9C27B0), Color(0xFFE91E63)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  )
+                : null,
+            child: Icon(
+              isFeedMode ? Icons.explore_rounded : Icons.home_rounded,
+              color: isFeedMode ? Colors.white : Colors.white,
+              size: 24,
+            ),
+          ),
         ),
       ),
     );
@@ -137,126 +247,6 @@ class _SearchPlaceholderPage extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage({required this.controller});
-
-  final AuthController controller;
-
-
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        final user = controller.user;
-        final isAuthenticating = controller.status == AuthStatus.authenticating;
-        final isLoggedIn = controller.isAuthenticated;
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: Insets.lg),
-          child: Center(
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                border: Border.all(color: const Color(0xFFE0D8CF)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '프로필',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textMain,
-                    ),
-                  ),
-                  Gaps.md,
-                  if (user != null) ...[
-                    _ProfileInfoRow(label: '이메일', value: user.email),
-                    if (user.displayName.isNotEmpty)
-                      _ProfileInfoRow(label: '이름', value: user.displayName),
-                    if (user.nickname.isNotEmpty)
-                      _ProfileInfoRow(label: '닉네임', value: user.nickname),
-                  ] else ...[
-                    const Text(
-                      '로그인 후 프로필을 확인할 수 있어요.',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  ],
-                  Gaps.md,
-                  ElevatedButton(
-                    onPressed: isAuthenticating
-                        ? null
-                        : (isLoggedIn ? controller.logout : () => _openLogin(context)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3A7D74),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: Text(isLoggedIn ? '로그아웃' : '로그인하기'),
-                  ),
-                  if (Environment.useMockFeed) ...[
-                    Gaps.md,
-                    const Text(
-                      'Mock 피드 모드가 활성화되어 있습니다.',
-                      style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openLogin(BuildContext context) async {
-    await showModernLoginModal(context, controller);
-  }
-}
-
-class _ProfileInfoRow extends StatelessWidget {
-  const _ProfileInfoRow({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 64,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: AppColors.textMain),
-            ),
-          ),
-        ],
       ),
     );
   }

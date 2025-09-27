@@ -1,2 +1,19 @@
-﻿.venv/
+﻿# Virtual environments
+.venv/
+**/.venv/
 
+# Environment files
+.env
+**/.env
+
+# Local tool caches
+.claude/
+.kakao_temp/
+
+# Python artifacts
+__pycache__/
+*.pyc
+
+# OS generated files
+.DS_Store
+Thumbs.db

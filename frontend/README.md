@@ -41,3 +41,4 @@
 - Sprint 1: TopBar + FloatingActionDock + 홈 피드 시트 골격
 - Sprint 2: 추천/검색 오버레이 Mock 연동, 상태 관리 구조 정리
 - 이후: 실제 API 연동, 위치 권한/푸시 처리, 파티·친구 기능 확장
+

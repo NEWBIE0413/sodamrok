@@ -3,7 +3,7 @@ import 'package:kakao_map_sdk/kakao_map_sdk.dart';
 import 'package:location/location.dart' as loc;
 
 import '../../../../core/services/kakao_rest_api_service.dart';
-import '../../domain/models/home_feed_post.dart';
+import '../../../home/domain/models/home_feed_post.dart';
 
 class HandDrawnMapWidget extends StatefulWidget {
   final List<HomeFeedPost> posts;
