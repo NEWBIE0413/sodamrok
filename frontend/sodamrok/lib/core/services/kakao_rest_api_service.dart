@@ -1,13 +1,22 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
 class KakaoRestApiService {
   static const String _baseUrl = 'https://dapi.kakao.com';
-  static const String _apiKey = '1b81234a7250834aca9d925309fbd7a4'; // REST API 키
 
-  static const Map<String, String> _headers = {
+  static String get _apiKey {
+    final key = dotenv.env['KAKAO_REST_API_KEY'];
+    if (key == null || key.isEmpty) {
+      throw Exception('KAKAO_REST_API_KEY가 .env 파일에 설정되지 않았습니다.');
+    }
+    debugPrint('API 키 로드됨: ${key.substring(0, 8)}...');
+    return key;
+  }
+
+  static Map<String, String> get _headers => {
     'Authorization': 'KakaoAK $_apiKey',
-    'Content-Type': 'application/json',
   };
 
   /// 좌표로 주소 검색 (좌표 → 주소)
@@ -17,29 +26,47 @@ class KakaoRestApiService {
   ) async {
     try {
       final url = Uri.parse(
-        '$_baseUrl/v2/local/geo/coord2address.json?x=$longitude&y=$latitude',
+        '$_baseUrl/v2/local/geo/coord2address.json?x=$longitude&y=$latitude&input_coord=WGS84',
       );
+
+      debugPrint('카카오 API 요청 URL: $url');
+      debugPrint('카카오 API 키: ${_apiKey.substring(0, 8)}...');
+      debugPrint('헤더: $_headers');
 
       final response = await http.get(url, headers: _headers);
 
+      debugPrint('응답 상태코드: ${response.statusCode}');
+      debugPrint('응답 본문: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        final documents = data['documents'] as List<dynamic>;
+        debugPrint('파싱된 응답 데이터: $data');
 
-        if (documents.isNotEmpty) {
+        final documents = data['documents'] as List<dynamic>?;
+
+        if (documents != null && documents.isNotEmpty) {
           final document = documents[0];
+          debugPrint('첫 번째 문서: $document');
+
           final roadAddress = document['road_address'];
           final address = document['address'];
 
           // 도로명 주소가 있으면 우선 사용, 없으면 지번 주소 사용
           if (roadAddress != null) {
-            return _formatRoadAddress(roadAddress);
+            final formattedAddress = _formatRoadAddress(roadAddress);
+            debugPrint('도로명 주소: $formattedAddress');
+            return formattedAddress;
           } else if (address != null) {
-            return _formatAddress(address);
+            final formattedAddress = _formatAddress(address);
+            debugPrint('지번 주소: $formattedAddress');
+            return formattedAddress;
           }
+        } else {
+          debugPrint('문서가 비어있음');
         }
       } else {
-        throw Exception('카카오 API 오류: ${response.statusCode}');
+        debugPrint('HTTP 오류 응답: ${response.statusCode}, 본문: ${response.body}');
+        throw Exception('카카오 API 오류: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       throw Exception('주소 변환 실패: $e');

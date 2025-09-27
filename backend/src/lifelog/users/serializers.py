@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from django.contrib.auth import password_validation
 from rest_framework import serializers
@@ -7,7 +7,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from lifelog.places.serializers import TagSerializer
 from lifelog.places.models import Tag
 
-from .models import User, UserPreferredTag
+from .models import User, UserBadge, UserPreferredTag, UserStamp
 
 
 class UserPreferredTagSerializer(serializers.ModelSerializer):
@@ -49,6 +49,8 @@ class UserPreferredTagSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     preferred_tags = UserPreferredTagSerializer(many=True, read_only=True)
+    stamps = serializers.SerializerMethodField()
+    badges = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -68,10 +70,28 @@ class UserSerializer(serializers.ModelSerializer):
             "privacy_level",
             "push_opt_in",
             "location_opt_in",
+            "profile_token_balance",
+            "stamps",
+            "badges",
             "date_joined",
             "last_login",
         )
-        read_only_fields = ("id", "email", "date_joined", "last_login", "onboarded_at")
+        read_only_fields = (
+            "id",
+            "email",
+            "date_joined",
+            "last_login",
+            "onboarded_at",
+            "profile_token_balance",
+            "stamps",
+            "badges",
+        )
+
+    def get_stamps(self, obj: User) -> list[str]:
+        return list(obj.stamps.values_list("code", flat=True))
+
+    def get_badges(self, obj: User) -> list[str]:
+        return list(obj.badges.values_list("code", flat=True))
 
 
 class PasswordResetSerializer(serializers.Serializer):
@@ -80,7 +100,7 @@ class PasswordResetSerializer(serializers.Serializer):
 
     def validate_email(self, value: str) -> str:
         if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("입력한 이메일과 일치하는 사용자가 없습니다.")
+            raise serializers.ValidationError("등록된 이메일과 일치하는 사용자가 없습니다.")
         return value
 
     def validate_new_password(self, value: str) -> str:
@@ -125,10 +145,9 @@ class UserCreateSerializer(serializers.ModelSerializer):
 
 
 class UserTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """JWT 발급 시 사용자 프로필을 함께 반환하는 직렬화기."""
+    """JWT 발급 시 사용자 정보도 함께 반환하는 직렬화기."""
 
     def validate(self, attrs):
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user, context=self.context).data
         return data
-

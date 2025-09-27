@@ -92,69 +92,61 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
           body: SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: SingleChildScrollView(
+              child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const SizedBox(height: 80),
+                    const SizedBox(height: 20),
 
-                    // 로고 섹션
+                    // POI 캐릭터 로고
                     Container(
-                      width: 100,
-                      height: 100,
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6B73FF), Color(0xFF9575CD)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6B73FF).withValues(alpha: 0.3),
-                            blurRadius: 30,
-                            offset: const Offset(0, 15),
+                            color: Colors.black.withValues(alpha: 0.1),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
                           ),
                         ],
                       ),
-                      child: const Center(
-                        child: Text(
-                          '소담',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.asset(
+                          'assets/images/POI.png',
+                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
 
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 24),
 
                     const Text(
                       '소담록에 오신걸 환영해요',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
                       textAlign: TextAlign.center,
                     ),
 
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
 
                     Text(
                       '일상의 소중한 순간들을 기록해보세요',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         color: Colors.grey.shade600,
                       ),
                       textAlign: TextAlign.center,
                     ),
 
-                    const SizedBox(height: 50),
+                    const SizedBox(height: 32),
 
                     // 소셜 로그인 버튼들
                     if (!_showEmailLogin) ...[
@@ -167,7 +159,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                         onPressed: isLoading ? null : () => _handleSocialLogin('google'),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
                       _SocialLoginButton(
                         icon: Icons.chat_bubble,
@@ -177,7 +169,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                         onPressed: isLoading ? null : () => _handleSocialLogin('kakao'),
                       ),
 
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
 
                       _SocialLoginButton(
                         icon: Icons.apple,
@@ -187,7 +179,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                         onPressed: isLoading ? null : () => _handleSocialLogin('apple'),
                       ),
 
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 24),
 
                       // 구분선
                       Row(
@@ -207,7 +199,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                         ],
                       ),
 
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 20),
 
                       // 이메일로 로그인 버튼
                       SizedBox(
@@ -391,7 +383,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                       ),
                     ],
 
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 24),
 
                     // 하단 링크들
                     Row(
@@ -426,7 +418,7 @@ class _ModernLoginScreenState extends State<ModernLoginScreen>
                       ],
                     ),
 
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),

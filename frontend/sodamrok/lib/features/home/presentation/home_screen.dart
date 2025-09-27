@@ -17,10 +17,20 @@ import '../domain/models/home_feed_post.dart';
 import 'widgets/hand_drawn_map_widget.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key, this.isFeedMode = true, required this.toggleButton});
+  const HomeScreen({
+    super.key,
+    this.isFeedMode = true,
+    required this.toggleButton,
+    this.onFeedExpansionChanged,
+    this.customContent,
+    this.selectedTab = 0,
+  });
 
   final bool isFeedMode;
   final Widget toggleButton;
+  final Function(bool)? onFeedExpansionChanged;
+  final Widget? customContent;
+  final int selectedTab;
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -166,9 +176,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
               child: widget.isFeedMode
-                  ? _FeedSheet(
+                  ? _ContentSheet(
                       key: const ValueKey('feed'),
+                      selectedTab: widget.selectedTab,
                       feedFuture: _feedFuture,
+                      onExpansionChanged: widget.onFeedExpansionChanged ?? (_) {},
                     )
                   : const _TripSheet(
                       key: ValueKey('trip'),
@@ -219,24 +231,33 @@ class _LocationBadge extends StatelessWidget {
   }
 }
 
-class _FeedSheet extends StatefulWidget {
-  const _FeedSheet({super.key, required this.feedFuture});
+// 간단한 콘텐츠 시트 - 하단바 탭에 따라 콘텐츠 변경
+class _ContentSheet extends StatefulWidget {
+  const _ContentSheet({
+    super.key,
+    required this.selectedTab,
+    required this.feedFuture,
+    required this.onExpansionChanged,
+  });
 
+  final int selectedTab; // 하단바에서 선택된 탭 (0: 피드, 1: 글쓰기, 2: 프로필)
   final Future<HomeFeedData> feedFuture;
+  final Function(bool) onExpansionChanged;
   static const double _collapsedHeight = 136;
 
   @override
-  State<_FeedSheet> createState() => _FeedSheetState();
+  State<_ContentSheet> createState() => _ContentSheetState();
 }
 
 enum _PostAction { like, comment }
 
-class _FeedSheetState extends State<_FeedSheet> {
+class _ContentSheetState extends State<_ContentSheet> {
   late Future<HomeFeedData> _feedFuture;
   late final AuthController _authController;
   late final PostInteractionService _interactionService;
   late AuthStatus _lastStatus;
   bool _isPerformingAction = false;
+  bool _lastExpansionState = false;
 
   @override
   void initState() {
@@ -466,12 +487,27 @@ class _FeedSheetState extends State<_FeedSheet> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final effectiveHeight = math.max(constraints.maxHeight - bottomInset, 1.0);
-        final collapsedRatio = _FeedSheet._collapsedHeight / effectiveHeight;
+        final collapsedRatio = _ContentSheet._collapsedHeight / effectiveHeight;
         final minChildSize = collapsedRatio.clamp(0.14, 0.28).toDouble();
 
         return Padding(
           padding: EdgeInsets.only(bottom: bottomInset),
-          child: DraggableScrollableSheet(
+          child: NotificationListener<DraggableScrollableNotification>(
+            onNotification: (notification) {
+              final isFullyExpanded = notification.extent >= 0.95;
+
+              if (_lastExpansionState != isFullyExpanded) {
+                _lastExpansionState = isFullyExpanded;
+
+                Future.delayed(const Duration(milliseconds: 100), () {
+                  if (mounted) {
+                    widget.onExpansionChanged.call(isFullyExpanded);
+                  }
+                });
+              }
+              return false;
+            },
+            child: DraggableScrollableSheet(
             initialChildSize: minChildSize,
             minChildSize: minChildSize,
             maxChildSize: 1.0,
@@ -495,57 +531,39 @@ class _FeedSheetState extends State<_FeedSheet> {
                         color: const Color(0xFFD8D2C8),
                       ),
                     ),
+                    // 모든 탭을 백그라운드에서 렌더링하되 비활성 탭은 터치 무시
                     Expanded(
-                      child: FutureBuilder<HomeFeedData>(
-                        future: _feedFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState != ConnectionState.done) {
-                            return const _FeedLoading();
-                          }
-
-                          if (snapshot.hasError) {
-                            return _FeedError(
-                              message: _resolveErrorMessage(snapshot.error),
-                              onRetry: _reload,
-                            );
-                          }
-
-                          final posts = snapshot.data?.posts ?? const <HomeFeedPost>[];
-
-                          if (posts.isEmpty) {
-                            return const _FeedEmpty();
-                          }
-
-                          return RefreshIndicator(
-                            onRefresh: _reload,
-                            child: ListView.builder(
-                              controller: controller,
-                              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-                              padding: EdgeInsets.only(
-                                top: Insets.xs,
-                                bottom: Insets.xl + bottomInset,
-                              ),
-                              itemBuilder: (context, index) {
-                                final post = posts[index];
-                                return _ModernFeedPostCard(
-                                  post: post,
-                                  isBusy: _isPerformingAction,
-                                  onLike: () => _handlePostAction(context, post, _PostAction.like),
-                                  onComment: () => _handlePostAction(context, post, _PostAction.comment),
-                                  onShare: () => _handleSharePost(context, post),
-                                  onProfileTap: () => _handleProfileTap(context, post.authorName),
-                                );
-                              },
-                              itemCount: posts.length,
+                      child: IndexedStack(
+                        index: widget.selectedTab,
+                        children: [
+                          IgnorePointer(
+                            ignoring: widget.selectedTab != 0,
+                            child: _FeedTabContent(
+                              feedFuture: _feedFuture,
+                              controller: widget.selectedTab == 0 ? controller : null,
+                              isPerformingAction: _isPerformingAction,
+                              onReload: _reload,
+                              onPostAction: _handlePostAction,
+                              onShare: _handleSharePost,
+                              onProfileTap: _handleProfileTap,
                             ),
-                          );
-                        },
+                          ),
+                          IgnorePointer(
+                            ignoring: widget.selectedTab != 1,
+                            child: _WriteTabContent(controller: widget.selectedTab == 1 ? controller : null),
+                          ),
+                          IgnorePointer(
+                            ignoring: widget.selectedTab != 2,
+                            child: _ProfileTabContent(controller: widget.selectedTab == 2 ? controller : null),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               );
             },
+            ),
           ),
         );
       },
@@ -725,26 +743,46 @@ class _ModernFeedPostCard extends StatelessWidget {
 
           Gaps.sm,
 
-          // Action buttons row
+          // Caption (내용을 사진 위로 이동)
+          if (post.caption.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Insets.md),
+              child: Text(
+                post.caption,
+                style: const TextStyle(
+                  color: AppColors.textMain,
+                  fontSize: 14,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            Gaps.sm,
+          ],
+
+          // Media/Content Section은 그대로 유지
+
+          Gaps.sm,
+
+          // Action buttons row with counts
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Insets.md),
             child: Row(
               children: [
-                _ActionButton(
-                  icon: post.isLiked ? Icons.favorite : Icons.favorite_border,
-                  color: post.isLiked ? Colors.red : AppColors.textSecondary,
+                _ActionButtonWithCount(
+                  iconPath: post.isLiked ? 'assets/icons/heart_toggle.png' : 'assets/icons/heart.png',
+                  count: post.likeCount,
                   onPressed: isBusy ? null : onLike,
                 ),
-                Gaps.sm,
-                _ActionButton(
-                  icon: Icons.mode_comment_outlined,
-                  color: AppColors.textSecondary,
+                Gaps.md,
+                _ActionButtonWithCount(
+                  iconPath: 'assets/icons/comment.png',
+                  count: post.commentCount,
                   onPressed: isBusy ? null : onComment,
                 ),
-                Gaps.sm,
-                _ActionButton(
-                  icon: Icons.share_outlined,
-                  color: AppColors.textSecondary,
+                Gaps.md,
+                _ActionButtonWithCount(
+                  iconPath: 'assets/icons/share.png',
+                  count: 0, // 공유는 카운트 없음
                   onPressed: onShare,
                 ),
                 const Spacer(),
@@ -768,72 +806,6 @@ class _ModernFeedPostCard extends StatelessWidget {
             ),
           ),
 
-          // Like count
-          if (post.likeCount > 0 || post.commentCount > 0)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Gaps.xs,
-                  Row(
-                    children: [
-                      if (post.likeCount > 0) ...[
-                        Text(
-                          '좋아요 ${post.likeCount}개',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMain,
-                            fontSize: 13,
-                          ),
-                        ),
-                        if (post.commentCount > 0) ...[
-                          const Text(' · ', style: TextStyle(color: AppColors.textSecondary)),
-                          Text(
-                            '댓글 ${post.commentCount}개',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ] else if (post.commentCount > 0)
-                        Text(
-                          '댓글 ${post.commentCount}개',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-          // Caption
-          if (post.caption.isNotEmpty) ...[
-            Gaps.xs,
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Insets.md),
-              child: RichText(
-                text: TextSpan(
-                  style: const TextStyle(
-                    color: AppColors.textMain,
-                    fontSize: 14,
-                    height: 1.4,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: '${post.authorName} ',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                    TextSpan(text: post.caption),
-                  ],
-                ),
-              ),
-            ),
-          ],
 
           Gaps.md,
         ],
@@ -842,28 +814,43 @@ class _ModernFeedPostCard extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.color,
+class _ActionButtonWithCount extends StatelessWidget {
+  const _ActionButtonWithCount({
+    super.key,
+    required this.iconPath,
+    required this.count,
     required this.onPressed,
   });
 
-  final IconData icon;
-  final Color color;
+  final String iconPath;
+  final int count;
   final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onPressed,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        child: Icon(
-          icon,
-          color: color,
-          size: 24,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Image.asset(
+            iconPath,
+            width: 28,
+            height: 28,
+            color: onPressed == null ? Colors.grey : null,
+          ),
+          if (count > 0) ...[
+            const SizedBox(width: 4),
+            Text(
+              count.toString(),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textMain,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -922,6 +909,425 @@ class _FeedEmpty extends StatelessWidget {
 }
 
 // 트립 시트 - 피드 시트와 동일한 구조
+// 피드 탭 콘텐츠 - 스크롤 위치 유지
+class _FeedTabContent extends StatefulWidget {
+  const _FeedTabContent({
+    super.key,
+    required this.feedFuture,
+    this.controller,
+    required this.isPerformingAction,
+    required this.onReload,
+    required this.onPostAction,
+    required this.onShare,
+    required this.onProfileTap,
+  });
+
+  final Future<HomeFeedData> feedFuture;
+  final ScrollController? controller;
+  final bool isPerformingAction;
+  final Future<void> Function() onReload;
+  final Future<void> Function(BuildContext, HomeFeedPost, _PostAction) onPostAction;
+  final void Function(BuildContext, HomeFeedPost) onShare;
+  final void Function(BuildContext, String) onProfileTap;
+
+  @override
+  State<_FeedTabContent> createState() => _FeedTabContentState();
+}
+
+class _FeedTabContentState extends State<_FeedTabContent> with AutomaticKeepAliveClientMixin {
+  ScrollController? _internalController;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _internalController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _internalController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // AutomaticKeepAliveClientMixin 필수
+
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset = mediaQuery.padding.bottom;
+
+    // 외부 controller가 있으면 우선 사용, 없으면 내부 controller 사용
+    final scrollController = widget.controller ?? _internalController;
+
+    return FutureBuilder<HomeFeedData>(
+      future: widget.feedFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const _FeedLoading();
+        }
+
+        if (snapshot.hasError) {
+          return _FeedError(
+            message: _resolveErrorMessage(snapshot.error),
+            onRetry: widget.onReload,
+          );
+        }
+
+        final posts = snapshot.data?.posts ?? const <HomeFeedPost>[];
+
+        if (posts.isEmpty) {
+          return const _FeedEmpty();
+        }
+
+        return RefreshIndicator(
+          onRefresh: widget.onReload,
+          child: ListView.builder(
+            controller: scrollController,
+            physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+            padding: EdgeInsets.only(
+              top: Insets.xs,
+              bottom: Insets.xl + bottomInset,
+            ),
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              return _ModernFeedPostCard(
+                post: post,
+                isBusy: widget.isPerformingAction,
+                onLike: () => widget.onPostAction(context, post, _PostAction.like),
+                onComment: () => widget.onPostAction(context, post, _PostAction.comment),
+                onShare: () => widget.onShare(context, post),
+                onProfileTap: () => widget.onProfileTap(context, post.authorName),
+              );
+            },
+            itemCount: posts.length,
+          ),
+        );
+      },
+    );
+  }
+
+  String _resolveErrorMessage(Object? error) {
+    if (error is HomeFeedException) {
+      return error.message;
+    }
+    return '피드를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+  }
+}
+
+// 글쓰기 탭 콘텐츠
+class _WriteTabContent extends StatelessWidget {
+  const _WriteTabContent({super.key, this.controller});
+
+  final ScrollController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      controller: controller,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '새 게시글 작성',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '소중한 순간을 기록해보세요',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // 사진 첨부 영역
+          Container(
+            width: double.infinity,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300, width: 1),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_photo_alternate_outlined,
+                  size: 32,
+                  color: Colors.grey.shade500,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '사진 추가',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          TextField(
+            decoration: InputDecoration(
+              hintText: '제목을 입력하세요',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            maxLines: 5,
+            decoration: InputDecoration(
+              hintText: '내용을 입력하세요',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade300),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: AppColors.primary),
+              ),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 위치 태그 버튼
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: AppColors.primary.withValues(alpha: 0.2),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  color: AppColors.primary,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '위치 태그 추가',
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {},
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    '게시하기',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// 프로필 탭 콘텐츠
+class _ProfileTabContent extends StatelessWidget {
+  const _ProfileTabContent({super.key, this.controller});
+
+  final ScrollController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // 상단 헤더 (프로필 + 아이콘들)
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              // 우측 상단 아이콘들과 프로필 정보
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 프로필 정보 (좌측 정렬)
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        // 프로필 이미지
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              colors: [
+                                AppColors.primary,
+                                AppColors.accent,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              '사용자',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // 이름
+                        const Text(
+                          '소담록 사용자',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // 우측 상단 아이콘들
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('프로필 수정')),
+                          );
+                        },
+                        icon: const Icon(Icons.edit_outlined),
+                        iconSize: 24,
+                        color: AppColors.textSecondary,
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('설정')),
+                          );
+                        },
+                        icon: const Icon(Icons.settings_outlined),
+                        iconSize: 24,
+                        color: AppColors.textSecondary,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        // 구분선
+        Container(
+          height: 1,
+          color: Colors.grey.shade200,
+        ),
+        // 게시글 목록
+        Expanded(
+          child: SingleChildScrollView(
+            controller: controller,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '내 게시글',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textMain,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                // 게시글 그리드 (임시 데이터)
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 1,
+                  ),
+                  itemCount: 9, // 임시 게시글 수
+                  itemBuilder: (context, index) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F6F2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFE8E3DB)),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          Icons.image_outlined,
+                          size: 32,
+                          color: AppColors.textSecondary.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _TripSheet extends StatefulWidget {
   const _TripSheet({super.key});
 

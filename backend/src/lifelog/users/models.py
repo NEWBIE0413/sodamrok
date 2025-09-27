@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
@@ -76,8 +76,9 @@ class User(UUIDModel, TimeStampedModel, AbstractBaseUser, PermissionsMixin):
 
     preferences = models.JSONField(default=dict, blank=True)
     push_opt_in = models.BooleanField(default=True)
-    location_opt_in = models.BooleanField(default=False)
-
+    location_opt_in = models.BooleanField(default=False)
+    profile_token_balance = models.PositiveIntegerField(default=0)
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
@@ -115,3 +116,29 @@ class UserPreferredTag(TimeStampedModel):
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.user_id}:{self.tag_id}"
 
+
+
+class UserStamp(TimeStampedModel):
+    user = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="stamps")
+    code = models.CharField(max_length=80)
+    acquired_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "code")
+        ordering = ("-acquired_at",)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user_id}:{self.code}"
+
+
+class UserBadge(TimeStampedModel):
+    user = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="badges")
+    code = models.CharField(max_length=80)
+    acquired_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "code")
+        ordering = ("-acquired_at",)
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.user_id}:{self.code}"
